@@ -1,5 +1,5 @@
 blueprint:
-  name: Bewegingsverlichting met lux en optionele dag/avond/nacht scenes
+  name: Bewegingsverlichting met lux en optionele avond/nacht scenes
   domain: automation
 
   input:
@@ -16,6 +16,56 @@ blueprint:
         entity:
           domain: sensor
           device_class: illuminance
+
+    day_scene:
+      name: Dag scene
+      selector:
+        entity:
+          domain: scene
+
+    use_evening_scene:
+      name: Avond scene gebruiken
+      default: false
+      selector:
+        boolean:
+
+    evening_scene:
+      name: Avond scene
+      default: ""
+      selector:
+        entity:
+          domain: scene
+
+    evening_start:
+      name: Start avond
+      default: "18:00:00"
+      selector:
+        time:
+
+    use_night_scene:
+      name: Nacht scene gebruiken
+      default: false
+      selector:
+        boolean:
+
+    night_scene:
+      name: Nacht scene
+      default: ""
+      selector:
+        entity:
+          domain: scene
+
+    night_start:
+      name: Start nacht
+      default: "23:00:00"
+      selector:
+        time:
+
+    off_scene:
+      name: Uit scene
+      selector:
+        entity:
+          domain: scene
 
     lux_threshold_on:
       name: Lux drempel inschakelen
@@ -44,70 +94,16 @@ blueprint:
       selector:
         duration:
 
-    use_day_scene:
-      name: Dag scene gebruiken
-      default: true
-      selector:
-        boolean:
-
-    use_night_scene:
-      name: Nacht scene gebruiken
-      default: true
-      selector:
-        boolean:
-
-    day_scene:
-      name: Dag scene
-      selector:
-        entity:
-          domain: scene
-
-    evening_scene:
-      name: Avond scene
-      description: Wordt ook gebruikt als fallback als dag of nacht uit staat.
-      selector:
-        entity:
-          domain: scene
-
-    night_scene:
-      name: Nacht scene
-      selector:
-        entity:
-          domain: scene
-
-    off_scene:
-      name: Uit scene
-      selector:
-        entity:
-          domain: scene
-
-    day_start:
-      name: Start dag
-      default: "07:00:00"
-      selector:
-        time:
-
-    evening_start:
-      name: Start avond
-      default: "18:00:00"
-      selector:
-        time:
-
-    night_start:
-      name: Start nacht
-      default: "23:00:00"
-      selector:
-        time:
-
 mode: restart
 max_exceeded: silent
 
 variables:
-  day_start: !input day_start
+  use_evening_scene: !input use_evening_scene
+  use_night_scene: !input use_night_scene
+  evening_scene: !input evening_scene
+  night_scene: !input night_scene
   evening_start: !input evening_start
   night_start: !input night_start
-  use_day_scene: !input use_day_scene
-  use_night_scene: !input use_night_scene
 
 trigger:
   - platform: state
@@ -131,12 +127,10 @@ condition: []
 action:
   - choose:
       - conditions:
-          - condition: or
-            conditions:
-              - condition: trigger
-                id: motion_detected
-              - condition: trigger
-                id: lux_below
+          - condition: trigger
+            id:
+              - motion_detected
+              - lux_below
           - condition: state
             entity_id: !input motion_sensor
             state: "on"
@@ -148,8 +142,7 @@ action:
               - conditions:
                   - condition: template
                     value_template: >
-                      {% set t = now().strftime('%H:%M:%S') %}
-                      {{ use_night_scene and (t >= night_start or t < day_start) }}
+                      {{ use_night_scene and night_scene != '' and now().strftime('%H:%M:%S') >= night_start }}
                 sequence:
                   - service: scene.turn_on
                     target:
@@ -158,17 +151,16 @@ action:
               - conditions:
                   - condition: template
                     value_template: >
-                      {% set t = now().strftime('%H:%M:%S') %}
-                      {{ use_day_scene and t >= day_start and t < evening_start }}
+                      {{ use_evening_scene and evening_scene != '' and now().strftime('%H:%M:%S') >= evening_start }}
                 sequence:
                   - service: scene.turn_on
                     target:
-                      entity_id: !input day_scene
+                      entity_id: !input evening_scene
 
             default:
               - service: scene.turn_on
                 target:
-                  entity_id: !input evening_scene
+                  entity_id: !input day_scene
 
       - conditions:
           - condition: trigger
