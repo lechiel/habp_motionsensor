@@ -1,5 +1,5 @@
 blueprint:
-  name: Lampen op beweging, lux en dag/avond/nacht scenes
+  name: Motion Sensor Light Blueprint
   domain: automation
 
   input:
