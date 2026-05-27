@@ -1,9 +1,5 @@
 blueprint:
-  name: Lampen op beweging, lux en nachtstand
-  description: >
-    Schakelt lampen aan bij beweging als het donker genoeg is.
-    Schakelt lampen uit na geen beweging, maar alleen als er voldoende licht is
-    of na de ingestelde vertraging. Optioneel met nachtstand.
+  name: Lampen op beweging, lux en dag/avond/nacht scenes
   domain: automation
 
   input:
@@ -21,8 +17,26 @@ blueprint:
           domain: sensor
           device_class: illuminance
 
-    lights:
-      name: Lamp(en)
+    day_scene:
+      name: Dag scene
+      selector:
+        entity:
+          domain: scene
+
+    evening_scene:
+      name: Avond scene
+      selector:
+        entity:
+          domain: scene
+
+    night_scene:
+      name: Nacht scene
+      selector:
+        entity:
+          domain: scene
+
+    lights_to_turn_off:
+      name: Lampen die uit mogen
       selector:
         target:
           entity:
@@ -38,64 +52,38 @@ blueprint:
           unit_of_measurement: lx
           mode: slider
 
-    off_lux_threshold:
-      name: Lux drempel voor uitschakelen
-      description: Lampen mogen uit als het lichter is dan deze waarde.
-      default: 80
-      selector:
-        number:
-          min: 0
-          max: 1000
-          unit_of_measurement: lx
-          mode: slider
-
     no_motion_delay:
-      name: Vertraging na geen beweging
+      name: Uitschakelvertraging
       default:
         minutes: 2
       selector:
         duration:
 
-    normal_brightness:
-      name: Helderheid normaal
-      default: 80
+    day_start:
+      name: Start dag
+      default: "07:00:00"
       selector:
-        number:
-          min: 1
-          max: 100
-          unit_of_measurement: "%"
-          mode: slider
+        time:
 
-    enable_night_mode:
-      name: Nachtstand inschakelen
-      default: false
+    evening_start:
+      name: Start avond
+      default: "18:00:00"
       selector:
-        boolean:
+        time:
 
     night_start:
-      name: Start nachtstand
+      name: Start nacht
       default: "23:00:00"
       selector:
         time:
 
-    night_end:
-      name: Einde nachtstand
-      default: "06:00:00"
-      selector:
-        time:
-
-    night_brightness:
-      name: Helderheid nachtstand
-      default: 20
-      selector:
-        number:
-          min: 1
-          max: 100
-          unit_of_measurement: "%"
-          mode: slider
-
 mode: restart
 max_exceeded: silent
+
+variables:
+  day_start: !input day_start
+  evening_start: !input evening_start
+  night_start: !input night_start
 
 trigger:
   - platform: state
@@ -133,27 +121,32 @@ action:
           - choose:
               - conditions:
                   - condition: template
-                    value_template: !input enable_night_mode
-                  - condition: time
-                    after: !input night_start
-                    before: !input night_end
+                    value_template: >
+                      {% set t = now().strftime('%H:%M:%S') %}
+                      {{ t >= night_start or t < day_start }}
                 sequence:
-                  - service: light.turn_on
-                    target: !input lights
-                    data:
-                      brightness_pct: !input night_brightness
+                  - service: scene.turn_on
+                    target:
+                      entity_id: !input night_scene
+
+              - conditions:
+                  - condition: template
+                    value_template: >
+                      {% set t = now().strftime('%H:%M:%S') %}
+                      {{ t >= evening_start and t < night_start }}
+                sequence:
+                  - service: scene.turn_on
+                    target:
+                      entity_id: !input evening_scene
+
             default:
-              - service: light.turn_on
-                target: !input lights
-                data:
-                  brightness_pct: !input normal_brightness
+              - service: scene.turn_on
+                target:
+                  entity_id: !input day_scene
 
       - conditions:
           - condition: trigger
             id: motion_off
-          - condition: numeric_state
-            entity_id: !input lux_sensor
-            above: !input off_lux_threshold
         sequence:
           - service: light.turn_off
-            target: !input lights
+            target: !input lights_to_turn_off
