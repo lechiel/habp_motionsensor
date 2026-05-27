@@ -4,6 +4,7 @@ blueprint:
     Schakelt verlichting op basis van beweging en lux.
     Ondersteunt aparte dag-, avond- en nachtscenes.
     Bij geen beweging wordt een aparte "uit" scene geactiveerd.
+    Uitschakelen gebeurt alleen als de lux boven de ingestelde uitschakeldrempel zit.
 
   domain: automation
 
@@ -22,10 +23,21 @@ blueprint:
           domain: sensor
           device_class: illuminance
 
-    lux_threshold:
-      name: Lux drempel
-      description: Alleen inschakelen onder deze luxwaarde
+    lux_threshold_on:
+      name: Lux drempel inschakelen
+      description: Lampen gaan aan onder deze luxwaarde
       default: 30
+      selector:
+        number:
+          min: 0
+          max: 1000
+          unit_of_measurement: lx
+          mode: slider
+
+    lux_threshold_off:
+      name: Lux drempel uitschakelen
+      description: Lampen mogen uit boven deze luxwaarde
+      default: 80
       selector:
         number:
           min: 0
@@ -105,7 +117,7 @@ trigger:
 
   - platform: numeric_state
     entity_id: !input lux_sensor
-    below: !input lux_threshold
+    below: !input lux_threshold_on
     id: lux_below
 
 condition: []
@@ -131,7 +143,7 @@ action:
 
           - condition: numeric_state
             entity_id: !input lux_sensor
-            below: !input lux_threshold
+            below: !input lux_threshold_on
 
         sequence:
 
@@ -183,6 +195,10 @@ action:
       - conditions:
           - condition: trigger
             id: no_motion
+
+          - condition: numeric_state
+            entity_id: !input lux_sensor
+            above: !input lux_threshold_off
 
         sequence:
           - service: scene.turn_on
