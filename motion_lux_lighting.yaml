@@ -40,7 +40,7 @@ blueprint:
 
     evening_start:
       name: Start avond
-      default: "18:00:00"
+      default: "20:00:00"
       selector:
         time:
 
@@ -59,7 +59,7 @@ blueprint:
 
     night_start:
       name: Start nacht
-      default: "23:00:00"
+      default: "01:00:00"
       selector:
         time:
 
