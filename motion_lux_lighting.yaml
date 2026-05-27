@@ -1,5 +1,10 @@
 blueprint:
-  name: Motion Sensor Light Blueprint
+  name: Bewegingsverlichting met lux en dag/avond/nacht scenes
+  description: >
+    Schakelt verlichting op basis van beweging en lux.
+    Ondersteunt aparte dag-, avond- en nachtscenes.
+    Bij geen beweging wordt een aparte "uit" scene geactiveerd.
+
   domain: automation
 
   input:
@@ -16,6 +21,24 @@ blueprint:
         entity:
           domain: sensor
           device_class: illuminance
+
+    lux_threshold:
+      name: Lux drempel
+      description: Alleen inschakelen onder deze luxwaarde
+      default: 30
+      selector:
+        number:
+          min: 0
+          max: 1000
+          unit_of_measurement: lx
+          mode: slider
+
+    no_motion_delay:
+      name: Wachttijd na geen beweging
+      default:
+        minutes: 2
+      selector:
+        duration:
 
     day_scene:
       name: Dag scene
@@ -35,29 +58,12 @@ blueprint:
         entity:
           domain: scene
 
-    lights_to_turn_off:
-      name: Lampen die uit mogen
+    off_scene:
+      name: Uit scene
+      description: Scene die actief wordt bij geen beweging
       selector:
-        target:
-          entity:
-            domain: light
-
-    lux_threshold:
-      name: Lux drempel voor inschakelen
-      default: 30
-      selector:
-        number:
-          min: 0
-          max: 1000
-          unit_of_measurement: lx
-          mode: slider
-
-    no_motion_delay:
-      name: Uitschakelvertraging
-      default:
-        minutes: 2
-      selector:
-        duration:
+        entity:
+          domain: scene
 
     day_start:
       name: Start dag
@@ -89,64 +95,96 @@ trigger:
   - platform: state
     entity_id: !input motion_sensor
     to: "on"
-    id: motion_on
+    id: motion_detected
 
   - platform: state
     entity_id: !input motion_sensor
     to: "off"
     for: !input no_motion_delay
-    id: motion_off
+    id: no_motion
 
   - platform: numeric_state
     entity_id: !input lux_sensor
     below: !input lux_threshold
-    id: dark_enough
+    id: lux_below
 
 condition: []
 
 action:
   - choose:
+
+      #########################################################
+      # VERLICHTING AAN
+      #########################################################
+
       - conditions:
-          - condition: trigger
-            id:
-              - motion_on
-              - dark_enough
+          - condition: or
+            conditions:
+              - condition: trigger
+                id: motion_detected
+              - condition: trigger
+                id: lux_below
+
           - condition: state
             entity_id: !input motion_sensor
             state: "on"
+
           - condition: numeric_state
             entity_id: !input lux_sensor
             below: !input lux_threshold
+
         sequence:
+
           - choose:
+
+              #################################################
+              # NACHT
+              #################################################
+
               - conditions:
                   - condition: template
                     value_template: >
                       {% set t = now().strftime('%H:%M:%S') %}
                       {{ t >= night_start or t < day_start }}
+
                 sequence:
                   - service: scene.turn_on
                     target:
                       entity_id: !input night_scene
+
+              #################################################
+              # AVOND
+              #################################################
 
               - conditions:
                   - condition: template
                     value_template: >
                       {% set t = now().strftime('%H:%M:%S') %}
                       {{ t >= evening_start and t < night_start }}
+
                 sequence:
                   - service: scene.turn_on
                     target:
                       entity_id: !input evening_scene
+
+            ###################################################
+            # DAG
+            ###################################################
 
             default:
               - service: scene.turn_on
                 target:
                   entity_id: !input day_scene
 
+      #########################################################
+      # VERLICHTING UIT
+      #########################################################
+
       - conditions:
           - condition: trigger
-            id: motion_off
+            id: no_motion
+
         sequence:
-          - service: light.turn_off
-            target: !input lights_to_turn_off
+          - service: scene.turn_on
+            target:
+              entity_id: !input off_scene
