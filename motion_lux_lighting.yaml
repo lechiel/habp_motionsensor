@@ -8,7 +8,9 @@ blueprint:
       selector:
         entity:
           domain: binary_sensor
-          multiple: false
+             device_class:
+              - motion
+              - occupancy
           
     lux_sensor:
       name: Lux sensor
