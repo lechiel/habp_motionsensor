@@ -1,0 +1,159 @@
+blueprint:
+  name: Lampen op beweging, lux en nachtstand
+  description: >
+    Schakelt lampen aan bij beweging als het donker genoeg is.
+    Schakelt lampen uit na geen beweging, maar alleen als er voldoende licht is
+    of na de ingestelde vertraging. Optioneel met nachtstand.
+  domain: automation
+
+  input:
+    motion_sensor:
+      name: Bewegingssensor
+      selector:
+        entity:
+          domain: binary_sensor
+          device_class: motion
+
+    lux_sensor:
+      name: Lux sensor
+      selector:
+        entity:
+          domain: sensor
+          device_class: illuminance
+
+    lights:
+      name: Lamp(en)
+      selector:
+        target:
+          entity:
+            domain: light
+
+    lux_threshold:
+      name: Lux drempel voor inschakelen
+      default: 30
+      selector:
+        number:
+          min: 0
+          max: 1000
+          unit_of_measurement: lx
+          mode: slider
+
+    off_lux_threshold:
+      name: Lux drempel voor uitschakelen
+      description: Lampen mogen uit als het lichter is dan deze waarde.
+      default: 80
+      selector:
+        number:
+          min: 0
+          max: 1000
+          unit_of_measurement: lx
+          mode: slider
+
+    no_motion_delay:
+      name: Vertraging na geen beweging
+      default:
+        minutes: 2
+      selector:
+        duration:
+
+    normal_brightness:
+      name: Helderheid normaal
+      default: 80
+      selector:
+        number:
+          min: 1
+          max: 100
+          unit_of_measurement: "%"
+          mode: slider
+
+    enable_night_mode:
+      name: Nachtstand inschakelen
+      default: false
+      selector:
+        boolean:
+
+    night_start:
+      name: Start nachtstand
+      default: "23:00:00"
+      selector:
+        time:
+
+    night_end:
+      name: Einde nachtstand
+      default: "06:00:00"
+      selector:
+        time:
+
+    night_brightness:
+      name: Helderheid nachtstand
+      default: 20
+      selector:
+        number:
+          min: 1
+          max: 100
+          unit_of_measurement: "%"
+          mode: slider
+
+mode: restart
+max_exceeded: silent
+
+trigger:
+  - platform: state
+    entity_id: !input motion_sensor
+    to: "on"
+    id: motion_on
+
+  - platform: state
+    entity_id: !input motion_sensor
+    to: "off"
+    for: !input no_motion_delay
+    id: motion_off
+
+  - platform: numeric_state
+    entity_id: !input lux_sensor
+    below: !input lux_threshold
+    id: dark_enough
+
+condition: []
+
+action:
+  - choose:
+      - conditions:
+          - condition: trigger
+            id:
+              - motion_on
+              - dark_enough
+          - condition: state
+            entity_id: !input motion_sensor
+            state: "on"
+          - condition: numeric_state
+            entity_id: !input lux_sensor
+            below: !input lux_threshold
+        sequence:
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: !input enable_night_mode
+                  - condition: time
+                    after: !input night_start
+                    before: !input night_end
+                sequence:
+                  - service: light.turn_on
+                    target: !input lights
+                    data:
+                      brightness_pct: !input night_brightness
+            default:
+              - service: light.turn_on
+                target: !input lights
+                data:
+                  brightness_pct: !input normal_brightness
+
+      - conditions:
+          - condition: trigger
+            id: motion_off
+          - condition: numeric_state
+            entity_id: !input lux_sensor
+            above: !input off_lux_threshold
+        sequence:
+          - service: light.turn_off
+            target: !input lights
